@@ -11,9 +11,11 @@ import {
     Easing,
     Image,
     View,
+    Alert,
     Text
 } from 'react-native';
 import _ from 'lodash';
+import EventEmitter from 'react-native-eventemitter';
 
 export default class VideoPlayer extends Component {
 
@@ -30,6 +32,7 @@ export default class VideoPlayer extends Component {
         title:                          '',
         rate:                           1,
         isFullscreen:                   false,
+        isScaling:                      false,
     };
 
     constructor( props ) {
@@ -49,6 +52,7 @@ export default class VideoPlayer extends Component {
             // Controls
 
             isFullscreen: this.props.isFullScreen || this.props.resizeMode === 'cover' || false,
+            isScaling: this.props.isScaling || this.props.resizeMode === 'cover' || false,
             showTimeRemaining: true,
             volumeTrackWidth: 0,
             lastScreenPress: 0,
@@ -86,6 +90,8 @@ export default class VideoPlayer extends Component {
             onScreenTouch: this._onScreenTouch.bind( this ),
             onEnterFullscreen: this.props.onEnterFullscreen,
             onExitFullscreen: this.props.onExitFullscreen,
+            onEnterButtonFullscreen: this.props.onEnterButtonFullscreen,
+            onExitButtonFullscreen: this.props.onExitButtonFullscreen,
             onLoadStart: this._onLoadStart.bind( this ),
             onProgress: this._onProgress.bind( this ),
             onLoad: this._onLoad.bind( this ),
@@ -98,9 +104,13 @@ export default class VideoPlayer extends Component {
          */
         this.methods = {
             toggleFullscreen: this._toggleFullscreen.bind( this ),
+            toggleButtonFullscreen: this._toggleButtonFullscreen.bind( this ),
             togglePlayPause: this._togglePlayPause.bind( this ),
             toggleControls: this._toggleControls.bind( this ),
             toggleTimer: this._toggleTimer.bind( this ),
+
+            changeOpenFullscreenButton: this._changeOpenFullscreenButton.bind( this ),
+            changeExitFullscreenButton: this._changeExitFullscreenButton.bind( this )
         };
 
         /**
@@ -148,7 +158,6 @@ export default class VideoPlayer extends Component {
             containerStyle: this.props.style || {}
         };
     }
-
 
 
     /**
@@ -424,18 +433,42 @@ export default class VideoPlayer extends Component {
      */
     _toggleFullscreen() {
         let state = this.state;
-
-        state.isFullscreen = ! state.isFullscreen;
+        //дополнительный флаг для масштабирвания вместо isFullscreen 
+        state.isScaling = ! state.isScaling;
+        //state.isFullscreen = ! state.isFullscreen;
 
         if (this.props.toggleResizeModeOnFullscreen) {
-            state.resizeMode = state.isFullscreen === true ? 'cover' : 'contain';
+            //state.resizeMode = state.isFullscreen === true ? 'cover' : 'contain';
+            state.resizeMode = state.isScaling === true ? 'cover' : 'contain';
         }
 
-        if (state.isFullscreen) {
+        //if (state.isFullscreen) {
+        if (state.isScaling) {
             typeof this.events.onEnterFullscreen === 'function' && this.events.onEnterFullscreen();
         }
         else {
             typeof this.events.onExitFullscreen === 'function' && this.events.onExitFullscreen();
+        }
+
+        this.setState( state );
+    }
+
+    _toggleButtonFullscreen() {
+        let state = this.state;
+
+        state.isFullscreen = ! state.isFullscreen;
+
+        /*if (this.props.toggleResizeModeOnFullscreen) {
+            state.resizeMode = state.isFullscreen === true ? 'cover' : 'contain';
+        }*/
+        state.isScaling = false;
+        state.resizeMode = 'contain';
+
+        if (state.isFullscreen) {
+            typeof this.events.onEnterButtonFullscreen === 'function' && this.events.onEnterButtonFullscreen();
+        }
+        else {
+            typeof this.events.onExitButtonFullscreen === 'function' && this.events.onExitButtonFullscreen();
         }
 
         this.setState( state );
@@ -480,6 +513,24 @@ export default class VideoPlayer extends Component {
         else {
             console.warn( 'Warning: _onBack requires navigator property to function. Either modify the onBack prop or pass a navigator prop' );
         }
+    }
+
+    _changeOpenFullscreenButton() {
+        let state = this.state;
+        state.isFullscreen = true;
+        state.isScaling = false;
+        state.resizeMode = 'contain';
+
+        this.setState( state );
+    }
+
+    _changeExitFullscreenButton() {
+        let state = this.state;
+        state.isFullscreen = false;
+        state.isScaling = false;
+        state.resizeMode = 'contain';
+
+        this.setState( state );
     }
 
     /**
@@ -703,6 +754,9 @@ export default class VideoPlayer extends Component {
         this.mounted = true;
 
         this.setState( state );
+
+        EventEmitter.on('changeOpenFullscreenButton', this.methods.changeOpenFullscreenButton);
+        EventEmitter.on('changeExitFullscreenButton', this.methods.changeExitFullscreenButton);
     }
 
     /**
@@ -712,6 +766,8 @@ export default class VideoPlayer extends Component {
     componentWillUnmount() {
         this.mounted = false;
         this.clearControlTimeout();
+        EventEmitter.removeListener('NavigatorOnRightButtonPress', this.methods.changeOpenFullscreenButton);
+        EventEmitter.removeListener('changeExitFullscreenButton', this.methods.changeExitFullscreenButton);
     }
 
     /**
@@ -937,12 +993,12 @@ export default class VideoPlayer extends Component {
     /**
      * Render fullscreen toggle and set icon based on the fullscreen state.
      */
-    renderFullscreen() {
-
+    renderFullscreen() {        
         let source = this.state.isFullscreen === true ? require( './assets/img/shrink.png' ) : require( './assets/img/expand.png' );
         return this.renderControl(
             <Image source={ source } />,
-            this.methods.toggleFullscreen,
+            //this.methods.toggleFullscreen,
+            this.methods.toggleButtonFullscreen,
             styles.controls.fullscreen
         );
     }
